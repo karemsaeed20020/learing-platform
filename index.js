@@ -25,7 +25,6 @@ app.use(cors({
 }));
 
 // ✅ Handle preflight requests
-app.options('*', cors());
 
 // ✅ CRITICAL: Increase server timeout for large file uploads
 server.timeout = 30 * 60 * 1000; // 30 minutes
