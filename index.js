@@ -2,7 +2,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import dotenv from 'dotenv';
-import cors from 'cors'; // ✅ ADD THIS
+import cors from 'cors';
 import appRouter from './src/app.router.js';
 import connectDB from './DB/dbConnection.js';
 
@@ -11,50 +11,61 @@ dotenv.config();
 const app = express();
 const server = createServer(app);
 
-// ✅ ADD CORS MIDDLEWARE FOR EXPRESS
+// ✅ PRODUCTION CORS CONFIGURATION
+const allowedOrigins = [
+  'https://elaby-platform-6ytr.vercel.app',
+  'https://elaby-ewlr.vercel.app',
+  'http://localhost:3000'
+];
+
 app.use(cors({
-  origin: [
-    "https://elaby-ewlr.vercel.app",
-    "https://elaby-platform-6ytr.vercel.app", // Your actual frontend domain
-    "http://localhost:3000",
-    "http://localhost:5173"
-  ],
+  origin: allowedOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'Set-Cookie']
 }));
 
-// ✅ Handle preflight requests
+// ✅ Remove any app.options('*', cors()) lines
 
-// ✅ CRITICAL: Increase server timeout for large file uploads
-server.timeout = 30 * 60 * 1000; // 30 minutes
-server.headersTimeout = 30 * 60 * 1000; // 30 minutes
-server.keepAliveTimeout = 30 * 60 * 1000; // 30 minutes
+// ✅ Body parser middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// ✅ CRITICAL: Increase server timeout
+server.timeout = 30 * 60 * 1000;
+server.headersTimeout = 30 * 60 * 1000;
+server.keepAliveTimeout = 30 * 60 * 1000;
+
+// ✅ Basic routes
 app.get("/", (req, res) => {
-  res.json({ message: "Backend is working!" });
+  res.json({ 
+    message: "Backend is working!",
+    environment: process.env.NODE_ENV
+  });
 });
 
-// ✅ Fix Socket.io CORS configuration (remove trailing slash)
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "success",
+    message: "Server is healthy",
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Socket.io configuration
 const io = new Server(server, {
   cors: {
-    origin: [
-      "https://elaby-ewlr.vercel.app",    
-      "https://elaby-platform-6ytr.vercel.app", // Add your actual domain
-      "http://localhost:3000"  
-    ],
-    methods: ["GET", "POST", 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    origin: allowedOrigins,
     credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization']
+    methods: ["GET", "POST", 'PUT', 'DELETE']
   },
   pingTimeout: 60000,
   pingInterval: 25000
 });
 
-// تخزين المستخدمين المتصلين
+// Your socket.io logic...
 const connectedUsers = new Map();
 
-// التعامل مع اتصالات Socket
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
@@ -83,37 +94,38 @@ io.on('connection', (socket) => {
   });
 });
 
-// ✅ CRITICAL: Global timeout middleware for all routes
+// ✅ Global timeout middleware
 app.use((req, res, next) => {
-  req.setTimeout(30 * 60 * 1000); // 30 minutes
-  res.setTimeout(30 * 60 * 1000); // 30 minutes
-  next();
-});
-
-// ✅ Specific timeout for upload routes
-app.use('/api/videos/upload', (req, res, next) => {
   req.setTimeout(30 * 60 * 1000);
   res.setTimeout(30 * 60 * 1000);
   next();
 });
 
-// Handle uncaught exceptions and rejections
-process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-});
-
-// تمرير io إلى appRouter
+// ✅ Import and use your appRouter
 appRouter(app, express, io);
 
+// ✅ CORRECT 404 handler (without wildcard *)
+app.use((req, res, next) => {
+  res.status(404).json({
+    status: 'fail',
+    message: `Route ${req.originalUrl} not found`
+  });
+});
+
+// ✅ Error handling middleware
+app.use((error, req, res, next) => {
+  console.error('🚨 Error:', error);
+  res.status(500).json({
+    status: 'error',
+    message: 'Internal server error'
+  });
+});
+
+// Connect to database and start server
 connectDB();
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-  console.log(`Server timeout set to: ${server.timeout}ms`);
-  console.log('✅ CORS enabled for frontend domains');
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`✅ CORS enabled for:`, allowedOrigins);
 });
