@@ -2,6 +2,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import dotenv from 'dotenv';
+import cors from 'cors'; // ✅ ADD THIS
 import appRouter from './src/app.router.js';
 import connectDB from './DB/dbConnection.js';
 
@@ -10,24 +11,42 @@ dotenv.config();
 const app = express();
 const server = createServer(app);
 
+// ✅ ADD CORS MIDDLEWARE FOR EXPRESS
+app.use(cors({
+  origin: [
+    "https://elaby-ewlr.vercel.app",
+    "https://elaby-platform-6ytr.vercel.app", // Your actual frontend domain
+    "http://localhost:3000",
+    "http://localhost:5173"
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'Set-Cookie']
+}));
+
+// ✅ Handle preflight requests
+app.options('*', cors());
+
 // ✅ CRITICAL: Increase server timeout for large file uploads
 server.timeout = 30 * 60 * 1000; // 30 minutes
 server.headersTimeout = 30 * 60 * 1000; // 30 minutes
 server.keepAliveTimeout = 30 * 60 * 1000; // 30 minutes
+
 app.get("/", (req, res) => {
   res.json({ message: "Backend is working!" });
 });
 
-// إعداد Socket.io
+// ✅ Fix Socket.io CORS configuration (remove trailing slash)
 const io = new Server(server, {
   cors: {
     origin: [
-    "https://elaby-ewlr.vercel.app/",    
-    "http://localhost:3000",  
-    ] ,
-
-    methods: ["GET", "POST", 'PUT', 'DELETE'],
-    credentials: true
+      "https://elaby-ewlr.vercel.app",    
+      "https://elaby-platform-6ytr.vercel.app", // Add your actual domain
+      "http://localhost:3000"  
+    ],
+    methods: ["GET", "POST", 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization']
   },
   pingTimeout: 60000,
   pingInterval: 25000
@@ -97,4 +116,5 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   console.log(`Server timeout set to: ${server.timeout}ms`);
+  console.log('✅ CORS enabled for frontend domains');
 });
